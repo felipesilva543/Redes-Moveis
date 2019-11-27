@@ -3,7 +3,7 @@
 #include "DHT.h"
 
 
-#define BOMBA       2   //PINO QUE ATIVA A BOMBA
+#define BOMBA       13   //PINO QUE ATIVA A BOMBA
 #define SENSOR      3  //PINO DE ALIMENTAÇÃO DO SENSOR
 #define PIN_SENSOR  A0
 
@@ -39,8 +39,8 @@ SoftwareSerial serial1(10, 11); // RX, TX
 DHT dht(DHTPIN, DHTTYPE);
 
 String textInicial0 = "\n\nInicie com OK.";
-String textoInicial = "Ola! Bem Vindo! \nMe informe qual a planta ira germinar: \n";
-String textoInicial2 = "Agora me informe a porcentagem de umidade mínima para o solo da planta (0 - 100): \n";
+String textoInicial = "\nOla! Bem Vindo! \nMe informe qual a planta ira germinar: ";
+String textoInicial2 = "\nAgora me informe a porcentagem de umidade mínima para o solo da planta (0 - 100): ";
 unsigned long delay1 = 0;
 
 void escreverB(String texto){
@@ -90,15 +90,14 @@ void setup() {
 String auxPor = "";
 bool estado = false;
 bool estadoAnterior;
-
+String textoFinal;
 
 void loop() {
   while(EEPROM.read(0) == 0){ // Verifica se já houve conexão
     escreverB(textInicial0);
     String str = "";
-    while(str == ""){
-      str = lerB();
-    }
+    str = lerB();
+    
     str.toUpperCase();
     if(str == "OK"){
         escreverB(textoInicial);
@@ -119,6 +118,7 @@ void loop() {
               EEPROM.write(0, 1);
               EEPROMWriteInt(1, variavelInt);
               EEPROMWriteStr(100, variavelString);
+              delay(500);
               variavelByte = EEPROM.read(0);         //Posicao 0 (zero) da EEPROM
               variavelInt  = EEPROMReadInt(1);       //Posicao 1 e 2 da EEPROM
               variavelString = EEPROMReadStr(100);   //A Partir da Posicao 100 da EEPROM
@@ -130,27 +130,27 @@ void loop() {
   variavelByte = EEPROM.read(0);        //Posicao 0 (zero) da EEPROM
   variavelInt  = EEPROMReadInt(1);      //Posicao 1 e 2 da EEPROM
   variavelString = EEPROMReadStr(100);  //A Partir da Posicao 100 da EEPROM
-
+  porcetConv = converterLeitura(variavelInt);
 
   /*Leitura sensor Temperatura e Umidade.*/
-//  float auxH = dht.readHumidity();
-//  float auxT = dht.readTemperature();
-//  if (isnan(auxT) || isnan(auxH)){
-//    Serial.println("Failed");
-//  } else{  
-//    Serial.println("T: " + String(auxT));
-//    Serial.println("U: " + String(auxH));
-//    t = auxT;
-//    h = auxH;
-//  }
+  float auxH = dht.readHumidity();
+  float auxT = dht.readTemperature();
+  if (isnan(auxT) || isnan(auxH)){
+    Serial.println("Failed");
+  } else{  
+    Serial.println("T: " + String(auxT));
+    Serial.println("U: " + String(auxH));
+    t = auxT;
+    h = auxH;
+  }
 /*End Leitura sensor Temperatura e Umidade.*/
 
   digitalWrite(SENSOR, HIGH); // Accende SENSOR
   leitura = analogRead(PIN_SENSOR);
+  Serial.println("Valor Umidade do solo: " + String(leitura));
+  Serial.println(porcetConv);
   digitalWrite(SENSOR, LOW); // Spegne SENSOR
-  leitura = 500;
-  Serial.print("Valor Umidade do solo: " + String(leitura));
-
+  
   if(leitura < porcetConv){
     estado = true;      // Informa que o solo está Seco
   }else{
@@ -158,14 +158,21 @@ void loop() {
   }
 
     if(estado && !estadoAnterior){
-      delay(5000); // Evita que entre no loop se estiver na transição de umido para seco
+      textoFinal = "\n###############\nUmidade abaixo do Ideal!";
+      escreverB(textoFinal);
       while(estado){
         digitalWrite(BOMBA, HIGH);
-        delay(500);
+        textoFinal = "\nLigando bomba";
+        escreverB(textoFinal);
+        delay(2000); // Tempo da bomba ativada
         digitalWrite(BOMBA, LOW);
+        textoFinal = "\nBomba Desligada. \nEsperando 10s.";
+        escreverB(textoFinal);
         delay(10000);
         digitalWrite(SENSOR, HIGH); // Accende SENSOR
         leitura = analogRead(PIN_SENSOR);
+        textoFinal = "\nNova leitura: " + String(converterPorcent(leitura)) + "%\n###############";
+        escreverB(textoFinal);
         digitalWrite(SENSOR, LOW); // Spegne SENSOR
         if(leitura >= porcetConv){
           estado = false;      // Informa que o solo está Seco
@@ -173,22 +180,24 @@ void loop() {
     }
   }
   estadoAnterior = estado;
-  
+
+  //#################### MSG DE DADOS #########################
   float valorEmPorcent = converterPorcent(leitura);
-  String textoFinal = "\n -----------------";
+  textoFinal = "\n ----------------------";
+  Serial.print(textoFinal);
   escreverB(textoFinal);  
   textoFinal = "\nPlanta: " + variavelString;
   escreverB(textoFinal);
-  Serial.println(textoFinal);
+  Serial.print(textoFinal);
   textoFinal = "\nUmidade Min. Solo: " + String(variavelInt) + "% " + "Atual: " + String(valorEmPorcent) + "%";
   escreverB(textoFinal);
-  Serial.println(textoFinal);
-  textoFinal = "\nTemperatura:  X - Umidade do AR: Y";
+  Serial.print(textoFinal);
+  textoFinal = "\nTemperatura: " + String(t) + "º - Umidade do AR: " + String(h);
   escreverB(textoFinal);
-  Serial.println(textoFinal);
+  Serial.print(textoFinal);
   textoFinal = "\n'Reset' para replantar :D";
   escreverB(textoFinal);
-  Serial.println(textoFinal);
+  Serial.print(textoFinal);
   
   String acao = lerB();
   acao.toUpperCase();
